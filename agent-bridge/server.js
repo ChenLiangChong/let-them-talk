@@ -4389,7 +4389,11 @@ function toolReset() {
   }
 
   // Remove known fixed files
-  for (const f of [MESSAGES_FILE, HISTORY_FILE, AGENTS_FILE, ACKS_FILE, TASKS_FILE]) {
+  // [local patch] MESSAGES_FILE / HISTORY_FILE / ACKS_FILE 這三個全域常數在 v5.3.1 的
+  // branch 重構後就不存在了（改成 branch-scoped getter），只有這行漏改，導致 reset
+  // 一呼叫就 ReferenceError。上面的 auto-archive 段已經用 getHistoryFile('main')，
+  // 這裡跟著對齊 'main'。
+  for (const f of [getMessagesFile('main'), getHistoryFile('main'), AGENTS_FILE, getAcksFile('main'), TASKS_FILE]) {
     if (fs.existsSync(f)) fs.unlinkSync(f);
   }
   // Glob for all consumed-*.json files (dynamic agent names)
@@ -4402,7 +4406,9 @@ function toolReset() {
     }
   }
   // Remove profiles, workflows, branches, permissions, read receipts, and new ecosystem files
-  for (const f of [PROFILES_FILE, WORKFLOWS_FILE, BRANCHES_FILE, PERMISSIONS_FILE, READ_RECEIPTS_FILE, CONFIG_FILE, DECISIONS_FILE, KB_FILE, LOCKS_FILE, PROGRESS_FILE, VOTES_FILE, REVIEWS_FILE, DEPS_FILE, REPUTATION_FILE, COMPRESSED_FILE]) {
+  // [local patch] READ_RECEIPTS_FILE / CONFIG_FILE / COMPRESSED_FILE 同樣是 v5.3.1 branch
+  // 重構後失效的全域常數，改用對應的 branch-scoped getter（對齊 'main'）。
+  for (const f of [PROFILES_FILE, WORKFLOWS_FILE, BRANCHES_FILE, PERMISSIONS_FILE, getReadReceiptsFile('main'), getConfigFile('main'), DECISIONS_FILE, KB_FILE, LOCKS_FILE, PROGRESS_FILE, VOTES_FILE, REVIEWS_FILE, DEPS_FILE, REPUTATION_FILE, getCompressedFile('main')]) {
     if (fs.existsSync(f)) fs.unlinkSync(f);
   }
   // Remove workspaces dir
