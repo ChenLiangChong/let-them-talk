@@ -1210,16 +1210,27 @@ async function listenWithTimeout(timeoutMs) {
   const immediate = getUnconsumedMessages(registeredName);
   if (immediate.length > 0) return immediate;
 
-  // Use fs.watch for instant wake on new messages (falls back to polling)
+  // Use fs.watch + polling fallback for reliable message detection.
+  // fs.watch can fail SILENTLY (no error thrown, no events delivered): WSL2 on
+  // network mounts, and macOS/Linux when the watched file is rotated or replaced
+  // by archive rollover. Always run polling as a safety net. [local patch]
   return new Promise((resolve) => {
     let resolved = false;
+    let pollInterval;
     const done = (result) => {
       if (resolved) return;
       resolved = true;
       try { if (watcher) watcher.close(); } catch {}
+      clearInterval(pollInterval);
       clearTimeout(timer);
       resolve(result);
     };
+
+    // Always poll as safety net (fs.watch may silently fail)
+    pollInterval = setInterval(() => {
+      const batch = getUnconsumedMessages(registeredName);
+      if (batch.length > 0) done(batch);
+    }, 1500);
 
     let watcher;
     try {
@@ -1230,16 +1241,7 @@ async function listenWithTimeout(timeoutMs) {
       });
       watcher.on('error', () => {}); // ignore watch errors
     } catch {
-      // fs.watch not available — fall back to polling
-      const pollInterval = setInterval(() => {
-        const batch = getUnconsumedMessages(registeredName);
-        if (batch.length > 0) {
-          clearInterval(pollInterval);
-          done(batch);
-        }
-      }, 1000);
-      setTimeout(() => { clearInterval(pollInterval); done([]); }, timeoutMs);
-      return;
+      // fs.watch not available — polling already running above
     }
 
     // Timeout: don't wait forever
@@ -3061,23 +3063,17 @@ async function toolListen(from = null) {
       return false;
     };
 
+    // Always poll as safety net (fs.watch may silently fail) [local patch]
+    fallbackInterval = setInterval(() => {
+      checkMessages();
+    }, 1500);
+
     try {
       const msgFile = getMessagesFile(currentBranch);
       watcher = fs.watch(msgFile, () => { checkMessages(); });
       watcher.on('error', () => {});
     } catch {
-      // Fallback: adaptive polling
-      let pollCount = 0;
-      fallbackInterval = setInterval(() => {
-        if (checkMessages()) { clearInterval(fallbackInterval); return; }
-        pollCount++;
-        if (pollCount === 10) {
-          clearInterval(fallbackInterval);
-          fallbackInterval = setInterval(() => {
-            if (checkMessages()) clearInterval(fallbackInterval);
-          }, 2000);
-        }
-      }, 500);
+      // fs.watch not available — polling already running above
     }
 
     // Heartbeat every 15s
@@ -3157,22 +3153,17 @@ async function toolListenCodex(from = null) {
       return false;
     };
 
+    // Always poll as safety net (fs.watch may silently fail) [local patch]
+    fallbackInterval = setInterval(() => {
+      checkMessages();
+    }, 1500);
+
     try {
       const msgFile = getMessagesFile(currentBranch);
       watcher = fs.watch(msgFile, () => { checkMessages(); });
       watcher.on('error', () => {});
     } catch {
-      let pollCount = 0;
-      fallbackInterval = setInterval(() => {
-        if (checkMessages()) { clearInterval(fallbackInterval); return; }
-        pollCount++;
-        if (pollCount === 10) {
-          clearInterval(fallbackInterval);
-          fallbackInterval = setInterval(() => {
-            if (checkMessages()) clearInterval(fallbackInterval);
-          }, 2000);
-        }
-      }, 500);
+      // fs.watch not available — polling already running above
     }
 
     const timer = setTimeout(() => {
@@ -3623,6 +3614,12 @@ async function toolListenGroup() {
     let channelWatchers = [];
     let fallbackInterval;
 
+    // Always poll as safety net (fs.watch may silently fail) [local patch]
+    fallbackInterval = setInterval(() => {
+      const batch = collectBatch();
+      if (batch.length > 0) done(batch);
+    }, 1500);
+
     try {
       // Watch main messages file for changes
       const msgFile = getMessagesFile(currentBranch);
@@ -3649,24 +3646,7 @@ async function toolListenGroup() {
         }
       }
     } catch {
-      // fs.watch not available — fall back to adaptive polling
-      let pollCount = 0;
-      fallbackInterval = setInterval(() => {
-        const batch = collectBatch();
-        if (batch.length > 0) {
-          clearInterval(fallbackInterval);
-          done(batch);
-        }
-        pollCount++;
-        // Adaptive: slow down after initial fast checks
-        if (pollCount === 10) {
-          clearInterval(fallbackInterval);
-          fallbackInterval = setInterval(() => {
-            const batch = collectBatch();
-            if (batch.length > 0) { clearInterval(fallbackInterval); done(batch); }
-          }, 2000); // slow poll every 2s
-        }
-      }, 500); // fast poll first 5s
+      // fs.watch not available — polling already running above
     }
 
     // Heartbeat every 15s while waiting — prevents dashboard from showing agent as dead
