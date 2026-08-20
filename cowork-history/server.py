@@ -30,7 +30,7 @@ COWORK_SESSIONS_BASE = os.environ.get("COWORK_SESSIONS_DIR") or next(
 
 CLI_SESSIONS_BASE = os.environ.get(
     "CLI_SESSIONS_DIR",
-    "/Users/charliechen/.claude/projects"
+    os.path.expanduser("~/.claude/projects")
 )
 
 # 專案目錄對照表（CLI session 目錄名 → 人看得懂的名稱）
