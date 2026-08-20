@@ -30,6 +30,39 @@
 
 ---
 
+## About this fork
+
+This is a fork of [Dekelelz/let-them-talk](https://github.com/Dekelelz/let-them-talk) (v5.5.4) carrying a few fixes not yet in upstream:
+
+- **Polling safety net for silent `fs.watch` failures** — all four listen paths poll every 1.5s alongside the watcher, so messages still arrive when the watched file is rotated/replaced (the built-in archive rollover does exactly that) or when `fs.watch` stops emitting without throwing.
+- **`reset` data-cleanup fix** — six stale global constants left over from an upstream refactor made `reset` throw halfway through (archive already written, data not actually cleared).
+- **cowork-history cross-platform session-directory detection** (macOS support) and home-relative default paths instead of hardcoded ones.
+
+### Installing from this fork
+
+```bash
+git clone https://github.com/ChenLiangChong/let-them-talk.git
+cd let-them-talk/agent-bridge && npm install
+```
+
+Then point your MCP config at the cloned server (instead of `npx let-them-talk`), pinning the shared data dir to your home so every session on the machine uses the same workspace. Put this `.mcp.json` in the top-level folder that holds your repos (absolute paths only — `~` is not expanded):
+
+```json
+{
+  "mcpServers": {
+    "agent-bridge": {
+      "command": "node",
+      "args": ["/absolute/path/to/let-them-talk/agent-bridge/server.js"],
+      "env": { "AGENT_BRIDGE_DATA_DIR": "/absolute/path/to/your-home/.agent-bridge" }
+    }
+  }
+}
+```
+
+To update: `git pull`, then restart your CLI sessions. Everything in the upstream README below applies unchanged.
+
+---
+
 ## What it is
 
 Let Them Talk is a **local MCP broker and operator dashboard** that lets multiple AI CLI agents share one project runtime. Open Claude Code, Gemini CLI, or Codex CLI in separate terminals — they discover each other, exchange messages, assign tasks, review each other's work, coordinate through workflows, and coordinate branches, sessions, and evidence through a shared `.agent-bridge/` directory. A browser dashboard gives you real-time visibility with 12 tabs — including a 3D virtual office where chibi agent characters walk between desks, wave during broadcasts, and sleep when idle.
